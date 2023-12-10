@@ -36,24 +36,31 @@ print(paste('Total outliers:', sum(dados$event == "TRUE")))
 # Plot the time series
 plot_ts(x = 1:length(dados$serie), y = dados$serie )
 
-# Adicionando um índice aos dados
+# Adicionando um Ã­ndice aos dados
 dados$indice <- 1:length(dados$serie)
 
-# Criando uma série temporal com os dados
+# Criando uma sÃ©rie temporal com os dados
 my_ts <- ts(dados$serie, start = dados$indice[1], end = dados$indice[length(dados$indice)])
 
-# Plotando a série temporal
-plot(my_ts, main = "Série Temporal", xlab = "Índice", ylab = "Valor da Série")
+# Plotando a sÃ©rie temporal
+plot(my_ts, main = "SÃ©rie Temporal", xlab = "Ãndice", ylab = "Valor da SÃ©rie")
 
-# Plotando a série temporal com outlier
+# Plotando a sÃ©rie temporal com outlier
 {
-  # Certifique-se de que `dados$event` é um vetor lógico
-  dados$event <- dados$event == "TRUE"
-  # Criando uma série temporal com os dados
-  my_ts <- ts(dados$serie, start = min(dados$indice), end = max(dados$indice))
-  # Plotando a série temporal com outliers destacados
-  plot(my_ts, main = "Série Temporal", xlab = "Índice", ylab = "Valor da Série")
-  points(which(dados$event), dados$serie[dados$event], pch = 20, col = "red")  
+  plot_time_series_with_outliers <- function(data, event_column_name, series_column_name) {
+      # Certifique-se de que a coluna de eventos seja um vetor lÃ³gico
+      data[[event_column_name]] <- data[[event_column_name]] == "TRUE"
+      
+      # Criando uma sÃ©rie temporal com os dados
+      my_ts <- ts(data[[series_column_name]], start = min(data$indice), end = max(data$indice))
+      
+      # Plotando a sÃ©rie temporal com outliers destacados
+      plot(my_ts, main = "SÃ©rie Temporal", xlab = "Ãndice", ylab = "Valor da SÃ©rie")
+      points(which(data[[event_column_name]]), data[[series_column_name]][data[[event_column_name]]], pch = 20, col = "red")
+    }
+    
+    # Exemplo de uso da funÃ§Ã£o
+    plot_time_series_with_outliers(dados, "event", "serie") 
 }
 
 # Parametros para janela deslizante
@@ -75,16 +82,16 @@ janelas_n = 10
   }
   # Metodo 2
   {
-    # Calculando as distâncias k-NN
+    # Calculando as distÃ¢ncias k-NN
     k_dist <- sort(kNNdist(datamatrix, k = 3))
     
-    # Calculando a taxa de mudança das distâncias k-NN
+    # Calculando a taxa de mudanÃ§a das distÃ¢ncias k-NN
     rate_of_change <- diff(k_dist)
     
-    # Encontrando o índice do maior aumento na taxa de mudança
+    # Encontrando o Ã­ndice do maior aumento na taxa de mudanÃ§a
     max_increase_index <- which.max(rate_of_change)
     
-    # O valor de 'eps' é escolhido como a distância k-NN no ponto de maior aumento
+    # O valor de 'eps' Ã© escolhido como a distÃ¢ncia k-NN no ponto de maior aumento
     eps_estimado <- k_dist[max_increase_index]
     
     # Plotando para verificar visualmente
@@ -92,31 +99,31 @@ janelas_n = 10
          xlab = "Points (sorted by distance)", ylab = "3-NN Distance")
     abline(h = eps_estimado, col = "red", lty = 2) 
     
-    cat("Valor de Eps estimado baseado na estimativa de ruído:", eps_estimado, "\n")
+    cat("Valor de Eps estimado baseado na estimativa de ruÃ­do:", eps_estimado, "\n")
     
   }
   # Metodo 3
   {
-    # 1. Gerar o gráfico 3-dist
+    # 1. Gerar o grÃ¡fico 3-dist
     k_dist <- sort(kNNdist(datamatrix, k = 3))
     plot(k_dist, type = "b", main = "3-NN Distance Plot",
          xlab = "Points (sorted by distance)", ylab = "3-NN Distance")
     
-    # 2. Derivar uma proposta para o ponto de limite a partir da estimativa de ruído
-    # Suponha que o usuário forneceu uma estimativa de 10% de ruído
+    # 2. Derivar uma proposta para o ponto de limite a partir da estimativa de ruÃ­do
+    # Suponha que o usuÃ¡rio forneceu uma estimativa de 10% de ruÃ­do
     percentual_ruido <- 10
     ponto_sugerido <- quantile(k_dist, probs = 1 - percentual_ruido/100)
     
-    # 3. Permitir que o usuário selecione o ponto de corte
-    # O usuário pode aceitar o ponto sugerido ou selecionar outro ponto manualmente
-    # Aqui está um exemplo de como aceitar a sugestão automaticamente
+    # 3. Permitir que o usuÃ¡rio selecione o ponto de corte
+    # O usuÃ¡rio pode aceitar o ponto sugerido ou selecionar outro ponto manualmente
+    # Aqui estÃ¡ um exemplo de como aceitar a sugestÃ£o automaticamente
     eps_estimado <- ponto_sugerido
     
-    # Adicionar uma linha no gráfico para o valor de eps estimado
+    # Adicionar uma linha no grÃ¡fico para o valor de eps estimado
     abline(h = eps_estimado, col = "red", lty = 2)
     
     # Informar o valor de eps estimado
-    cat("Valor de Eps estimado baseado na estimativa de ruído:", eps_estimado, "\n")
+    cat("Valor de Eps estimado baseado na estimativa de ruÃ­do:", eps_estimado, "\n")
   }
 }
 
@@ -126,8 +133,8 @@ janelas_n = 10
   
   dbscanResult
   
-  # O número de cores deve ser pelo menos igual ao número de clusters mais um para o ruído
-  num_clusters <- max(dbscanResult$cluster) + 1  # Adicione 1 para o ruído
+  # O nÃºmero de cores deve ser pelo menos igual ao nÃºmero de clusters mais um para o ruÃ­do
+  num_clusters <- max(dbscanResult$cluster) + 1  # Adicione 1 para o ruÃ­do
   color_palette <- brewer.pal(ifelse(num_clusters <= 8, num_clusters, 8), "Set1")
   
   # Se houver mais clusters do que cores na paleta 'Set1', crie uma paleta de cores maior
@@ -192,7 +199,7 @@ janelas_n = 10
     #c = list(a,b)
     return( b )
   }
-  # Aplica uma função a cada coluna do dataframe e obtém os valores únicos
+  # Aplica uma funÃ§Ã£o a cada coluna do dataframe e obtÃ©m os valores Ãºnicos
   get_unique_values <- function(df, func) {
     unique(apply(df, 2, func))
   }
@@ -212,19 +219,19 @@ janelas_n = 10
 
 # Comparando os resultados
 {
-  # Definição prévia do vetor de eventos verdadeiros
+  # DefiniÃ§Ã£o prÃ©via do vetor de eventos verdadeiros
   vetor_evento <- dados$serie[dados$event == "TRUE"]
   
-  # Função otimizada para comparar anomalias
+  # FunÃ§Ã£o otimizada para comparar anomalias
   compara_anomalias <- function(dados1, dados2) {
-    # Arredondamento e obtenção de valores únicos apenas uma vez
+    # Arredondamento e obtenÃ§Ã£o de valores Ãºnicos apenas uma vez
     dados1_uniq <- unique(round(dados1, 6))
     dados2_uniq <- unique(round(dados2, 6))
     
-    # Verificação de correspondência
+    # VerificaÃ§Ã£o de correspondÃªncia
     matches <- dados1_uniq %in% dados2_uniq
     
-    # Construção da lista de resultados
+    # ConstruÃ§Ã£o da lista de resultados
     list(
       matches = matches,
       count = table(matches),
@@ -233,7 +240,7 @@ janelas_n = 10
     )
   }
   
-  # Aplicação da função compara_anomalias aos vetores de anomalias
+  # AplicaÃ§Ã£o da funÃ§Ã£o compara_anomalias aos vetores de anomalias
   results <- lapply(list(list_v_max_mean, list_v_max_median, list_v_max_log), compara_anomalias, dados2 = vetor_evento)
   
   # Acessando os resultados
@@ -248,8 +255,8 @@ janelas_n = 10
     # Cores para cada conjunto de resultados
     cores <- c("red", "blue", "green")
     
-    # Plotar a série temporal base
-    plot(my_ts, main = "Anomalias por Método", ylab = "Valor da Série")
+    # Plotar a sÃ©rie temporal base
+    plot(my_ts, main = "Anomalias por MÃ©todo", ylab = "Valor da SÃ©rie")
     
     for (i in seq_along(results_list)) {
       # Determinar os pontos de anomalia para cada conjunto de resultados
@@ -264,7 +271,7 @@ janelas_n = 10
     legend("bottomright", legend = c("Max Mean", "Max Median", "Max Log"), col = cores, pch = 20, cex = 0.75)
   }
   
-  # Usar a função com my_ts, dados e a lista de resultados (c1, c2, c3)
+  # Usar a funÃ§Ã£o com my_ts, dados e a lista de resultados (c1, c2, c3)
   plot_anomalias_unico_grafico(my_ts, dados, list(c1, c2, c3))
   
 }
@@ -278,7 +285,7 @@ janelas_n = 10
 }
 
 
-# Versao final do código DBSCAN e distribuicao
+# Versao final do cÃ³digo DBSCAN e distribuicao
 {
   # Load the datasets
   data("har_examples")
@@ -288,7 +295,7 @@ janelas_n = 10
   # Making sure if the event column is factor
   dados$event = factor(dados$event, labels=c("FALSE", "TRUE"))
   
-  # Função para calcular as probabilidades usando DBSCAN
+  # FunÃ§Ã£o para calcular as probabilidades usando DBSCAN
   dbscan_dist_prob_ts <- function(vetor_serie, tamanho_janela, eps, minPts, limiar) {
     data_ts_janela <- ts_data(vetor_serie, tamanho_janela)
     datamatrix <- matrix(data_ts_janela, nrow = dim(data_ts_janela)[1], ncol = tamanho_janela)
@@ -343,7 +350,7 @@ janelas_n = 10
     
     vetor_anomalias_unicas_detectadas <- unique(unlist(probab_anomalias_bic))
     
-    # Gráficos (não otimizados)
+    # GrÃ¡ficos (nÃ£o otimizados)
     grafico_dbscan <- plot_hull(datamatrix, dbscanResult, main = "DBSCAN")
     grafico_boxplot <- boxplot(data.frame(t(datamatrix_df_anomalias)), plot = TRUE)
     grafico_knn <- dbscan::kNNdistplot(datamatrix, k = minPts)
@@ -358,7 +365,7 @@ janelas_n = 10
     return(result)
   }
   
-  # Função para plotar o gráfico de hull
+  # FunÃ§Ã£o para plotar o grÃ¡fico de hull
   plot_hull <- function(datamatrix, dbscanResult, main = "DBSCAN") {
     n_clusters <- max(dbscanResult$cluster)
     colors <- rainbow(n_clusters)
@@ -373,22 +380,21 @@ janelas_n = 10
     legend("topright", legend = as.character(1:n_clusters), fill = colors)
   }
   
-  # Chamando a função
+  # Chamando a funÃ§Ã£o
   result <- dbscan_dist_prob_ts(dados$serie, tamanho_janela = 10, eps = 0.53, minPts = 3, limiar = 0.25)
   
-  # Verificando anomalias em relação aos eventos reais
+  # Verificando anomalias em relaÃ§Ã£o aos eventos reais
   event_detectados <- table(result[[2]] %in% dados$serie[dados$event == TRUE])
   
-  # Outras operações (não otimizadas)
+  # Outras operaÃ§Ãµes (nÃ£o otimizadas)
   c1 <- compara_anomalias(result[[2]], dados$serie)
   dados$event_dbscan_dist_prob_ts <- dados$serie %in% c1[[4]]
   dados$indice <- 1:length(dados$serie)
   my_ts <- ts(dados$serie, dados$indice)
   
-  # Gráfico (não otimizado)
-  plot.ts(my_ts)
-  points(dados$indice[dados$event == "TRUE"], dados$serie[dados$event == "TRUE"], pch = 20, col = "red")
-  
+  # GrÃ¡fico (nÃ£o otimizado)
+  plot_time_series_with_outliers(dados, "event", "serie") 
+
   plot.ts(my_ts)
   points(dados$indice[dados$event_dbscan_dist_prob_ts == "TRUE"], dados$serie[dados$event_dbscan_dist_prob_ts], pch = 20, col = "red")
   
