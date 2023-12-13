@@ -42,11 +42,12 @@ dbscan_dist_prob_ts <- function(vetor_serie, tamanho_janela, eps = NULL, minPts,
   distancias <- kNNdist(data_ts_janela, k = minPts, all = TRUE)
   Binseg_cp <- cpt.meanvar(cumsum(distancias), method = "BinSeg", Q = 10)
   
+  
   results <- list()
   
   for (i in 1:length(Binseg_cp@cpts)) {
     eps_value <- distancias[Binseg_cp@cpts[i]]
-    dbscanResult <- dbscan(datamatrix, eps = eps_value, minPts = minPts)
+    dbscanResult <- dbscan::dbscan(datamatrix, eps = eps_value, minPts = minPts)
     
     if (any(dbscanResult$cluster == 0)) {
       datamatrix_df <- data.frame(datamatrix)
@@ -64,7 +65,8 @@ dbscan_dist_prob_ts <- function(vetor_serie, tamanho_janela, eps = NULL, minPts,
       
       grafico_boxplot <- boxplot(data.frame(t(datamatrix_df_anomalias)), plot = TRUE)
       
-      grafico_dbscan <- dbscan::hullplot(datamatrix, dbscanResult, main = "DBSCAN")
+      custom_palette <- rainbow(length(unique(dbscanResult$cluster)))
+      dbscan::hullplot(datamatrix, dbscanResult, main = "DBSCAN", palette = custom_palette)
       
       teste <- list()
       nomes_dist_bic <- character()
@@ -82,7 +84,7 @@ dbscan_dist_prob_ts <- function(vetor_serie, tamanho_janela, eps = NULL, minPts,
       lista_anomalias_unicas_detectadas[[i]] <- unique(unlist(probab_anomalias_bic))
       results[[i]] <- list(teste = teste, nomes_dist_bic = nomes_dist_bic)
     } else {
-      cat("Não foram detectadas anomalias\n")
+      cat("NÃ£o foram detectadas anomalias\n")
     }
   }
   
@@ -90,6 +92,11 @@ dbscan_dist_prob_ts <- function(vetor_serie, tamanho_janela, eps = NULL, minPts,
 }
 
 fit_and_test_distribution <- function(data) {
+  if (any(data <= 0)) {
+    # If data contains non-positive values, return a result indicating it's not suitable for lognormal fitting
+    return(list(best_fit = "Not Suitable", gof = NULL, is_anomaly = FALSE))
+  }
+  
   fits <- list(
     fitdistrplus::fitdist(data, "lnorm"),
     fitdistrplus::fitdist(data, "exp"),
