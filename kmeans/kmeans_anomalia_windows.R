@@ -1,5 +1,47 @@
+# Load the necessary libraries
+library(cluster)
 
-kmeans_windows_detected_optimized <- function(name_Dataset, dataset, windows, output_dir = getwd(), save_file = TRUE) {
+# Function to find the best number of centroids based on silhouette score
+find_best_k <- function(data) {
+  best_k <- 2
+  best_silhouette <- -1
+  
+  if (length(unique(data) < 10)) {
+    top_k <- length(unique(data)) - 1
+    return(best_k)
+  }else{
+    top_k <- 10
+  }
+  
+  for (k in 2:top_k) {
+    tryCatch({
+      model <- kmeans(data, centers = k)
+      
+      # Check for cases where there are empty clusters
+      if (any(table(model$cluster) == 0)) {
+        cat("Empty clusters found for k =", k, "\n")
+        next
+      }
+      
+      silhouette_score <- silhouette(model$cluster, dist(data))
+      avg_silhouette <- mean(silhouette_score[, "sil_width"])
+      
+      if (avg_silhouette > best_silhouette) {
+        best_silhouette <- avg_silhouette
+        best_k <- k
+      }
+    }, error = function(e) {
+      cat(paste("Error processing k =", k, ":", e$message, "\n"))
+      # Handle the error or continue with the next K value
+      next
+    })
+  }
+  
+  return(best_k)
+}
+
+
+kmeans_windows_detected_optimized_test <- function(name_Dataset, dataset, windows, output_dir = getwd(), save_file = TRUE) {
   # kmeans_windows_detected_optimized Function Description
   #
   # This R function serves as a wrapper for the hanct_kmeans algorithm, designed to detect sequences
@@ -11,6 +53,7 @@ kmeans_windows_detected_optimized <- function(name_Dataset, dataset, windows, ou
   # - i: An identifier for the detected sequence.
   # - windows: The number of windows used to detect the sequence.
   # - idx1, idx2, ..., idxN: The indices corresponding to the detected sequence elements.
+  # - centroid: The number of centroids used to detect the sequence.
   #
   # Optionally, the function can save the resulting data frame as an RDS file in a specified output directory,
   # based on the value of the `save_file` parameter.
@@ -50,7 +93,11 @@ kmeans_windows_detected_optimized <- function(name_Dataset, dataset, windows, ou
     
     tryCatch({
       
-      model <- hanct_kmeans(seq = windows)
+      #print(paste("Lenght unique serie", length(unique(dataset[, serie]))))
+      best_k <- find_best_k(dataset[, serie])
+      #print(paste("Best K for serie", serie, "is", best_k))
+      
+      model <- hanct_kmeans(seq = windows, centers = best_k)
       fitted_model <- fit(model, dataset[, serie])
       detection <- detect(fitted_model, dataset[, serie])
       seq_window <- detection %>% filter(event == TRUE)
@@ -64,7 +111,8 @@ kmeans_windows_detected_optimized <- function(name_Dataset, dataset, windows, ou
           name_Dataset = character(0),
           serie = character(0),
           i = integer(0),
-          windows = integer(0)
+          windows = integer(0),
+          centroid = integer(0)  # Added centroid column
         )
         for (i in 1:windows) {
           df[paste0("idx", i)] <- integer(0)
@@ -88,8 +136,10 @@ kmeans_windows_detected_optimized <- function(name_Dataset, dataset, windows, ou
           serie = rep(serie, length(seq_lengths)),
           i = 1:length(seq_lengths),
           windows = rep(windows, length(seq_lengths)),
+          centroid = rep(best_k, length(seq_lengths)),  # Added centroid column
           setNames(data.frame(idx_columns), col_names)
         )
+        
       }
       
       results[[serie]] <- df
