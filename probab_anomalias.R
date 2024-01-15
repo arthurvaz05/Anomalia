@@ -1,5 +1,7 @@
 probab <- function(datamatrix_df_anomalias, limiar, original_data) {
   results <- list()
+  probab_anomalias_bic <- list()
+  lista_anomalias_unicas_detectadas <- list()
   
   for (j in 1:dim(datamatrix_df_anomalias)[1]) {
     
@@ -14,6 +16,9 @@ probab <- function(datamatrix_df_anomalias, limiar, original_data) {
     result <- as.numeric(result)
     
     dados_anomalia <- original_data[result,datamatrix_df_anomalias[j,'serie']]
+    
+    # remove NA values
+    dados_anomalia <- dados_anomalia[!is.na(dados_anomalia)]
     
     #######################################################
     
@@ -37,8 +42,9 @@ probab <- function(datamatrix_df_anomalias, limiar, original_data) {
     }
   }
   
-  lista_anomalias_unicas_detectadas[[i]] <- unique(unlist(probab_anomalias_bic))
-  return(results)
+  lista_anomalias_unicas_detectadas[[j]] <- unique(unlist(probab_anomalias_bic))
+  
+  return(list(results,probab_anomalias_bic,lista_anomalias_unicas_detectadas))
 }
 
 library(dplyr)
@@ -46,36 +52,32 @@ library(fitdistrplus)
 
 fit_and_test_distribution <- function(data) {
   print(data)
-  if (any(data <= 0)) {
-    # If data contains non-positive values, generate the distribution test without lognormal and exponential
-    fits <- list(
-      fitdist(data, "gamma"),
-      fitdist(data, "unif"),
-      fitdist(data, "logis"),
-      fitdist(data, "norm")
-    )
-    gof_stats <- lapply(fits, gofstat)
-  } else if (length(unique(data)) == 1) {
-    # If all data points are identical (no variation), estimate parameters directly
-    fits <- list(best_fit = "Not Suitable",gof = NULL,is_anomaly = FALSE, NULL)
-    return(fits)
-  } else {
-    fits <- list(
-      fitdist(data, "lnorm"),
-      fitdist(data, "exp"),
-      fitdist(data, "gamma"),
-      fitdist(data, "unif"),
-      fitdist(data, "logis"),
-      fitdist(data, "norm")
-    )
-    gof_stats <- lapply(fits, gofstat)
+  
+  fits <- list()
+  
+  distribution_list <- c("gamma", "lnorm", "exp", "gamma", "unif", "logis", "norm")
+  
+  for (dist in distribution_list) {
+    tryCatch({
+      fits[[dist]] <- fitdist(data, dist)
+    }, error = function(e) {
+      cat("Error fitting distribution", dist, ": ", conditionMessage(e), "\n")
+    })
   }
+  
+  gof_stats <- lapply(fits, gofstat)
   
   best_fit_idx <- which.min(sapply(gof_stats, function(x) x$bic))
   best_fit <- names(best_fit_idx)
-  best_fit <- unlist(strsplit(best_fit, "-"))[3]
   
-  if (best_fit %in% c("lognormal", "exp", "gamma", "unif", "logis")) {
+  if (is.null(best_fit)) {
+    fits <- list(best_fit = "Not Suitable",gof = NULL,is_anomaly = FALSE, NULL)
+    return(fits)
+  } else {
+    best_fit <- strsplit(best_fit, "-")[[1]][3]
+  }
+  
+  if (best_fit %in% c("lnorm", "exp", "gamma", "unif", "logis")) {
     params <- as.list(fits[[best_fit_idx]]$estimate)
     is_anomaly <- switch(
       best_fit,
@@ -87,7 +89,7 @@ fit_and_test_distribution <- function(data) {
     )
     anomalias <- data[is_anomaly]
   } else {
-    is_anomaly <- dnorm(data, mean = fits[[best_fit_idx]]$estimate$mean, sd = fits[[best_fit_idx]]$estimate$sd) < limiar
+    is_anomaly <- dnorm(data, mean = fits[[best_fit_idx]]$estimate[['mean']], sd = fits[[best_fit_idx]]$estimate[['sd']]) < limiar
     anomalias <- data[is_anomaly]
   }
   

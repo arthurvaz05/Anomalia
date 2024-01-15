@@ -4,6 +4,9 @@ gecco_result <- readRDS("gecco_windons.RDS")
 setwd("/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/Dataset")
 load("gecco_sample.RData")
 
-source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/probab_anomalias.R')
+source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/probab_anomalias_copy.R')
 
-probab(gecco_result,0.2,gecco_sample)
+resultado <- probab(gecco_result,0.2,gecco_sample)
+
+resultado[[2]]
+
