@@ -33,7 +33,7 @@ probab <- function(datamatrix_df_anomalias, limiar, original_data) {
         is_anomaly = FALSE
       )
     } else {
-      fit_result <- fit_and_test_distribution(dados_anomalia)
+      fit_result <- fit_and_test_distribution(dados_anomalia, limiar)
       results[[j]] <- list(
         teste = fit_result$gof,
         nomes_dist_bic = fit_result$best_fit
@@ -50,7 +50,7 @@ probab <- function(datamatrix_df_anomalias, limiar, original_data) {
 library(dplyr)
 library(fitdistrplus)
 
-fit_and_test_distribution <- function(data) {
+fit_and_test_distribution <- function(data, limiar) {
   print(data)
   
   fits <- list()
