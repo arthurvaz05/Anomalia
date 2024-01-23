@@ -6,7 +6,7 @@ load("gecco_sample.RData")
 
 source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/probab_anomalias.R')
 
+
+
+
 resultado <- probab(gecco_result,0.2,gecco_sample)
-
-resultado[[2]]
-
