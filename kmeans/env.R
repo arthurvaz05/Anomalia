@@ -22,10 +22,14 @@ source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/carregar_b
   library(harbinger)
   setwd('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/kmeans')
   source('kmeans_anomalia_windows.R')
-  source('kmeans_anomalia_windows_test.R')
-
 }
 
+
+###. TEST ENV
+{
+  
+  
+}
 
 
 ###. GECCO - RESULTADOS KMEANS 5, 10, 15, 20, 25, 30
