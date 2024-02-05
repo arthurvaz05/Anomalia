@@ -63,3 +63,37 @@ for (j in c(5, 10, 15, 20, 25, 30)) {
 }
 
 df_final
+
+
+
+############-----Analysis-----############
+
+# Number of windows detected
+df_final %>% group_by(variable) %>% summarise(n = n())
+
+# Number of sizes of windows detected
+df_final %>% group_by(seq) %>% summarise(n = n())
+
+# Convert seqlen to a factor
+df_final$seqlen <- factor(df_final$seqlen)
+
+# Check unique values in the seqlen variable
+unique_seqlen <- unique(df_final$seqlen)
+
+# Determine the number of unique seqlen values
+num_unique_seqlen <- length(unique_seqlen)
+
+# Create a scatter plot using scale_shape_manual
+scatter_plot <- ggplot(df_final, aes(x = recall, y = precision, color = variable, shape = seqlen)) +
+  geom_point() +
+  labs(x = "Recall", y = "Precision", color = "Variable", shape = "Seqlen") +
+  scale_shape_manual(values = 1:num_unique_seqlen) +  # Assign shapes manually
+  ggtitle("Gecco Kmeans result: Precision vs. Recall") +  # Add a title
+  theme_minimal()
+
+# Show the scatter plot
+print(scatter_plot)
+
+
+
+
