@@ -68,11 +68,17 @@ df_final
 
 ############-----Analysis-----############
 
-# Number of windows detected
-df_final %>% group_by(variable) %>% summarise(n = n())
+# Number of windows detected sorted by variable
+df_final %>% group_by(variable) %>% summarise(n = n()) %>% arrange(desc(n))
 
 # Number of sizes of windows detected
-df_final %>% group_by(seq) %>% summarise(n = n())
+df_final %>% group_by(seq) %>% summarise(n = n()) %>% arrange(desc(n))
+
+# Average recall and precision by variable
+df_final %>% group_by(variable) %>% summarise(mean_recall = mean(recall), mean_precision = mean(precision)) %>% arrange(desc(mean_precision))
+
+# Average recall and precision by size
+df_final %>% group_by(seq) %>% summarise(mean_recall = mean(recall), mean_precision = mean(precision)) %>% arrange(desc(mean_precision))
 
 # Convert seqlen to a factor
 df_final$seqlen <- factor(df_final$seqlen)
