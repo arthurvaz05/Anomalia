@@ -64,6 +64,8 @@ for (j in c(5, 10, 15, 20, 25, 30)) {
 
 df_final
 
+# SAVE the file
+save(df_final, file = "kmeans_result.RData")
 
 
 ############-----Analysis-----############

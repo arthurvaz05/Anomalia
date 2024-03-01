@@ -1,0 +1,79 @@
+---
+title: "Analysis"
+output: html_document
+date: "2024-03-01"
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+
+load('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/kmeans/kmeans_result.RData')
+```
+
+## EDA
+
+Undestending how the data is distributed in the Kmeans result file.
+
+-  Number of windows detected sorted by variable
+
+```{r analyse1, echo=FALSE}
+df_final %>% group_by(variable) %>% summarise(n = n()) %>% arrange(desc(n))
+```
+
+The variable f1 has the most windows detected.
+
+- Number of sizes of windows detected
+
+```{r analyse2, echo=FALSE}
+df_final %>% group_by(seq) %>% summarise(n = n()) %>% arrange(desc(n))
+```
+The size 30 has the most windows detected.
+
+- Average recall and precision by variable
+
+```{r analyse3, echo=FALSE}
+df_final %>% group_by(variable) %>% summarise(mean_recall = mean(recall), mean_precision = mean(precision)) %>% arrange(desc(mean_precision))
+```
+
+The redox variable demonstrates the highest average precision, indicating that the model excels in detecting anomalies within this variable. However, across all variables, the model experiences a significant number of false negatives due to window size limitations, as the example fails to explore anomaly sequence cases.
+
+- Average recall and precision by size
+
+```{r analyse4, echo=FALSE}
+df_final %>% group_by(seq) %>% summarise(mean_recall = mean(recall), mean_precision = mean(precision)) %>% arrange(desc(mean_precision))
+
+```
+
+Size 15 exhibited superior performance in both precision and recall, despite the fact that size 5 has a smaller window size effect compared to 15.
+
+## Conclusion
+
+The variable with a window size of 10 exhibits the highest average precision and recall, making it a promising starting point for enhancing the model.
+
+```{r analyse5, echo=FALSE}
+
+# Convert seqlen to a factor
+df_final$seqlen <- factor(df_final$seqlen)
+
+# Check unique values in the seqlen variable
+unique_seqlen <- unique(df_final$seqlen)
+
+# Determine the number of unique seqlen values
+num_unique_seqlen <- length(unique_seqlen)
+
+# Create a scatter plot using scale_shape_manual
+scatter_plot <- ggplot(df_final, aes(x = recall, y = precision, color = variable, shape = seqlen)) +
+  geom_point() +
+  labs(x = "Recall", y = "Precision", color = "Variable", shape = "Seqlen") +
+  scale_shape_manual(values = 1:num_unique_seqlen) +  # Assign shapes manually
+  ggtitle("Gecco Kmeans result: Precision vs. Recall") +  # Add a title
+  theme_minimal()
+
+# Show the scatter plot
+print(scatter_plot)
+
+```
