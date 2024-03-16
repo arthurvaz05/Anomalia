@@ -15,8 +15,6 @@ source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/carregar_b
   
   library(daltoolbox)
   library(harbinger)
-  setwd('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/kmeans')
-  source('kmeans_anomalia_windows.R')
 }
 
 # Base directory for the datasets
@@ -67,6 +65,9 @@ df_final
 # SAVE the file
 save(df_final, file = "kmeans_result.RData")
 
+# Load the file
+load("kmeans_result.RData")
+df_final%>%head()
 
 ############-----Analysis-----############
 
