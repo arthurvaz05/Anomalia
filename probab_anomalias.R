@@ -1,5 +1,8 @@
 probab <- function(datamatrix_df_anomalias, limiar, original_data) {
   results <- list()
+  probab_anomalias_bic <- list()
+  lista_anomalias_unicas_detectadas <- list()
+  idx_list <- list()
   
   for (j in 1:nrow(datamatrix_df_anomalias)) {
     print(j)

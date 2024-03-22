@@ -8,3 +8,4 @@ source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/probab_ano
 
 
 resultado <- probab(gecco_result,0.2,gecco_sample)
+
