@@ -265,9 +265,6 @@ prob_dist <-  function(data, limiar) {
   return(anomalias)
 }
 
-method <- "autoencoder"
-limiar <- 0.2
-
 anomaly_window_normalization <- function(time_series, method = 'dbscan', limiar = 0.2) {
   # seleciona as colunas de acordo com o modelo escolhido
   switch(method,
