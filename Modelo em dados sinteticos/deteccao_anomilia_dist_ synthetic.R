@@ -22,7 +22,6 @@ source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/carregar_b
 base_dir <- "/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/Dataset"
 
 
-
 generate_time_series <- function(n, anomalies_qty, variance_size, anomaly_intensity,noise_sd = 0.5,seasonality = c(1,-1),trend_increment = 0.1 ,stationary = TRUE, window_anomaly = TRUE) {
   # Generate the time index
   time_index <- 1:n
@@ -37,7 +36,7 @@ generate_time_series <- function(n, anomalies_qty, variance_size, anomaly_intens
                                                 seasonality = list(pattern = seasonality), 
                                                 noise_sd = noise_sd)
   }
-  
+  anomaly_idx_list <- c()
   # Add anomalies
   for (i in 1:anomalies_qty) {
     # Randomly select the position of the anomaly
@@ -46,8 +45,12 @@ generate_time_series <- function(n, anomalies_qty, variance_size, anomaly_intens
     if (window_anomaly) {
       anomaly_size <- sample(1:10, 1)
       anomaly_indices <- anomaly_position:(anomaly_position + anomaly_size - 1)
+      # Store the indices of the anomaly
+      anomaly_idx_list <- c(anomaly_idx_list,anomaly_indices)
     } else {
       anomaly_indices <- anomaly_position
+      # Store the indices of the anomaly
+      anomaly_idx_list <- c(anomaly_idx_list,anomaly_indices)
     }
     # Randomly select the direction of the anomaly
     anomaly_direction <- sample(c(-1, 1), 1)
@@ -59,9 +62,9 @@ generate_time_series <- function(n, anomalies_qty, variance_size, anomaly_intens
   time_series_df <- data.frame(time = time_index, value = time_series)
   time_series_df$event <- FALSE
   if (window_anomaly) {
-    time_series_df[anomaly_indices, 'event'] <- TRUE
+    time_series_df[anomaly_idx_list, 'event'] <- TRUE
   } else {
-    time_series_df[anomaly_position, 'event'] <- TRUE
+    time_series_df[anomaly_idx_list, 'event'] <- TRUE
   }
   
   return(time_series_df)
@@ -104,10 +107,10 @@ time_series <- generate_time_series(n = 50,
 # plot
 plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
 
-kmeans_func <- function(time_series, window) {
+kmeans_func <- function(time_series, window, n_cluster = 2) {
   # disable the warnings
   options(warn = -1)
-  model <- hanct_kmeans(seq = window, centers = 2)
+  model <- hanct_kmeans(seq = window, n_cluster)
   fitted_model <- fit(model, time_series)
   detection <- detect(fitted_model, time_series)
   seq_window <- detection %>% filter(event == TRUE)  
@@ -119,8 +122,12 @@ kmeans_func <- function(time_series, window) {
   #print(seq_window)
   seq_window[seq_window$idx_final > nrow(time_series),'idx_final'] <- nrow(time_series)
   time_series$predicted_event <- FALSE
+  time_series$seq_start <- 0
+  time_series$seq_len <- 0
   for (i in 1:nrow(seq_window)) {
     time_series$predicted_event[seq_window$idx[i]:seq_window$idx_final[i]] <- TRUE
+    time_series$seq_start[seq_window$idx[i]] <- 1
+    time_series$seq_len[seq_window$idx[i]] <- window
   }
   return(time_series)
 }
@@ -184,17 +191,22 @@ dbscan_func <- function(time_series, window,minPts) {
   
   idx_final <- idx+window-1
   idx_final[idx_final > nrow(time_series)] <- nrow(time_series)
-  
+  # print(idx)
+  # print(idx_final)
   time_series$predicted_event2 <- FALSE
+  time_series$seq_start2 <- 0
+  time_series$seq_len2 <- 0
   for (i in 1:length(idx)) {
     time_series$predicted_event2[idx[i]:idx_final[i]] <- TRUE
+    time_series$seq_start2[idx[i]] <- 1
+    time_series$seq_len2[idx[i]] <- window
   }
   
   return(time_series)
 }
 
-autoencoder_func <- function(time_series, window) {
-  model <- han_autoencoder(1,window)
+autoencoder_func <- function(time_series, window, encode = 1) {
+  model <- han_autoencoder(window,encode)
   fitted_model <- fit(model, time_series[,'value'])
   detection <- detect(fitted_model,  time_series[,'value'])
   seq_window <- detection %>% filter(event == TRUE)  
@@ -207,8 +219,12 @@ autoencoder_func <- function(time_series, window) {
   seq_window[seq_window$idx_final > nrow(time_series),'idx_final'] <- nrow(time_series)
   #print(seq_window)
   time_series$predicted_event3 <- FALSE
+  time_series$seq_start3 <- 0
+  time_series$seq_len3 <- 0
   for (i in 1:nrow(seq_window)) {
     time_series$predicted_event3[seq_window$idx[i]:seq_window$idx_final[i]] <- TRUE
+    time_series$seq_start3[seq_window$idx[i]] <- 1
+    time_series$seq_len3[seq_window$idx[i]] <- window
   }
   return(time_series)
 }
@@ -259,25 +275,285 @@ prob_dist <-  function(data, limiar) {
   return(anomalias)
 }
 
+anomaly_window_normalization <- function(time_series, method = 'dbscan', limiar = 0.2) {
+  switch(method,
+         'kmeans' = {
+           predict_col <- 'predicted_event'
+           seq_start_col <- 'seq_start'
+           seq_len_col <- 'seq_len'
+         },
+         'dbscan' = {
+           predict_col <- 'predicted_event2'
+           seq_start_col <- 'seq_start2'
+           seq_len_col <- 'seq_len2'
+         },
+         'autoencoder' = {
+           predict_col <- 'predicted_event3'
+           seq_start_col <- 'seq_start3'
+           seq_len_col <- 'seq_len3'
+         }
+  )
+  
+  data <- time_series[time_series[, predict_col], c(predict_col, 'value', seq_start_col, seq_len_col)]
+  data$seq_inicio <- rownames(data) %>% as.numeric() * data[, seq_start_col]
+  data$seq_fim <- data$seq_inicio + data[, seq_len_col] - 1
+  data$seq_fim <- data$seq_fim * data[, seq_start_col]
+  
+  z_scores_idx <- data[data[, seq_start_col] == 1, c('seq_inicio', 'seq_fim')]
+  z_scores_list <- lapply(seq_along(data$seq_inicio), function(i) {
+    seq_ <- data$value[rownames(data) %in% seq(data$seq_inicio[i], data$seq_fim[i])]
+    mean_val <- mean(seq_)
+    sd_val <- sd(seq_)
+    z_scores <- scale(seq_, center = mean_val, scale = sd_val)
+    z_scores[, 1]
+  })
+  
+  y <- unlist(z_scores_list)
+  anomalias <- prob_dist(y, limiar)
+  
+  data2 <- data.frame(seq_anomaly = y, dist_anomaly = y %in% anomalias)
+  
+  idx_anomalies <- lapply(seq(length(z_scores_idx$seq_inicio)), function(i) {
+    seq(z_scores_idx$seq_inicio[i], z_scores_idx$seq_fim[i])
+  })
+  data2$real_Seq <- unlist(idx_anomalies)
+  
+  # check the real_Seq if the dist_anomaly is False THEN real_Seq is Null
+  data2$real_Seq <- ifelse(data2$dist_anomaly, data2$real_Seq, NA)
+  
+  return(data2)
+}
+
+window_abroad_normalization <- function(method, time_series, threshold_window = 30, more = 1) {
+  
+  switch(method,
+         'kmeans' = {
+           predict_col <- 'predicted_event'
+           seq_start_col <- 'seq_start'
+           seq_len_col <- 'seq_len'
+         },
+         'dbscan' = {
+           predict_col <- 'predicted_event2'
+           seq_start_col <- 'seq_start2'
+           seq_len_col <- 'seq_len2'
+         },
+         'autoencoder' = {
+           predict_col <- 'predicted_event3'
+           seq_start_col <- 'seq_start3'
+           seq_len_col <- 'seq_len3'
+         }
+  )
+  data_total <- time_series[time_series[, predict_col], c(predict_col,'time','value', seq_start_col, seq_len_col)]
+  data_total <- data_total[data_total[,seq_start_col]==1,]
+  data_total <- cbind(data_total, generate_length_window(data_total,method,threshold_window,predict_col,seq_start_col,seq_len_col, more))
+  return(data_total)
+}
+
+generate_length_window <- function(data_total,method,threshold_window,predict_col,seq_start_col,seq_len_col, more = 1) {
+  seq_start_left <- list()
+  seq_end_left <- list()
+  seq_len_left <- list()
+  limit_left <- list()
+  seq_start_right <- list()
+  seq_end_right <- list()
+  seq_len_right <- list()
+  limit_right <- list()
+  
+  #reset index
+  rownames(data_total) <- 1:nrow(data_total)
+  
+  # loop interaction
+  for (i in 1:nrow(data_total)) {
+    # print(i)
+    data <- data_total[i,]
+    # print(data)
+    # if more equal to 1 ceiling will be on the right, if 0 floor will be on the right
+    if (more == 1) {
+      if(floor((threshold_window - data[,seq_len_col])/2)+data[,'time']+data[,seq_len_col] > nrow(time_series)) {
+        seq_start_right[i] <- (data[,'time']+data[,seq_len_col])+1
+        seq_end_right[i] <- nrow(time_series)
+        seq_len_right[i] <- seq_end_right[[i]][[1]] - seq_start_right[[i]][[1]]
+        limit_right[i] <- TRUE
+      } else {
+        seq_start_right[i] <- (data[,'time']+data[,seq_len_col])+1
+        seq_end_right[i] <- floor((threshold_window - data[,seq_len_col])/2)+data[,'time']+data[,seq_len_col]+1
+        seq_len_right[i] <- seq_end_right[[i]][[1]] - seq_start_right[[i]][[1]]
+        limit_right[i] <- FALSE
+      }
+      
+      if(data[,'time']-ceiling((threshold_window - data[,seq_len_col])/2) < 0) {
+        seq_start_left[i] <- 1
+        seq_end_left[i] <- data[,'time']-seq_start_left[[i]][[1]]
+        seq_len_left[i] <- seq_end_left[[i]][[1]] - seq_start_left[[i]][[1]]
+        limit_left[i] <- TRUE
+      } else {
+        seq_start_left[i] <- data[,'time']-ceiling((threshold_window - data[,seq_len_col])/2)-1
+        seq_end_left[i] <- seq_start_left[[i]][[1]]+ceiling((threshold_window - data[,seq_len_col])/2)
+        seq_len_left[i] <- seq_end_left[[i]][[1]] - seq_start_left[[i]][[1]]
+        limit_left[i] <- FALSE
+      }
+      
+      if (limit_right[[i]][[1]] == TRUE) {
+        residual_size <- floor((threshold_window - data[,seq_len_col])/2) - seq_len_right[[i]][[1]]
+        seq_start_left[i] <- seq_start_left[[i]][[1]] - residual_size
+        seq_len_left[i] <- seq_len_left[[i]][[1]] + residual_size
+      } else if (limit_right[[i]][[1]] == TRUE) {
+        residual_size <- ceiling((threshold_window - data[,seq_len_col])/2) - seq_len_left[[i]][[1]]
+        seq_end_right[i] <- seq_end_right[[i]][[1]] + residual_size
+        seq_len_right[i] <- seq_len_right[[i]][[1]] + residual_size
+      }
+      
+    }
+    else {
+      if(ceiling((threshold_window - data[,seq_len_col])/2)+data[,'time']+data[,seq_len_col] > nrow(time_series)) {
+        seq_start_right[i] <- (data[,'time']+data[,seq_len_col])+1
+        seq_end_right[i] <- nrow(time_series)
+        seq_len_right[i] <- seq_end_right[[i]][[1]] - seq_start_right[[i]][[1]]
+        limit_right[i] <- TRUE
+      } else {
+        seq_start_right[i] <- (data[,'time']+data[,seq_len_col])
+        seq_end_right[i] <- ceiling((threshold_window - data[,seq_len_col])/2)+data[,'time']+data[,seq_len_col]
+        seq_len_right[i] <- seq_end_right[[i]][[1]] - seq_start_right[[i]][[1]]
+        limit_right[i] <- FALSE
+      }
+      
+      if(data[,'time']-floor((threshold_window - data[,seq_len_col])/2) < 0) {
+        seq_start_left[i] <- 1
+        seq_end_left[i] <- data[,'time']-seq_start_left[[i]][[1]]
+        seq_len_left[i] <- seq_end_left[[i]][[1]] - seq_start_left[[i]][[1]]
+        limit_left[i] <- TRUE
+      } else {
+        seq_start_left[i] <- data[,'time']-floor((threshold_window - data[,seq_len_col])/2)-1
+        seq_end_left[i] <- seq_start_left[[i]][[1]]+floor((threshold_window - data[,seq_len_col])/2)
+        seq_len_left[i] <- seq_end_left[[i]][[1]] - seq_start_left[[i]][[1]]
+        limit_left[i] <- FALSE
+      }
+      
+      if (limit_right[[i]][[1]] == TRUE) {
+        residual_size <- ceiling((threshold_window - data[,seq_len_col])/2) - seq_len_right[[i]][[1]]
+        seq_start_left[i] <- seq_start_left[[i]][[1]] - residual_size
+        seq_len_left[i] <- seq_len_left[[i]][[1]] + residual_size
+      } else if (limit_right[[i]][[1]] == TRUE) {
+        residual_size <- floor((threshold_window - data[,seq_len_col])/2) - seq_len_left[[i]][[1]]
+        seq_end_right[i] <- seq_end_right[[i]][[1]] + residual_size
+        seq_len_right[i] <- seq_len_right[[i]][[1]] + residual_size
+      }
+    }
+  }
+  switch(method,
+         'kmeans' = {
+           result <- data.frame('seq_start_left' = unlist(seq_start_left), 'seq_end_left' = unlist(seq_end_left), 
+                                'seq_len_left' = unlist(seq_len_left), 'seq_start_right' = unlist(seq_start_right),
+                                'seq_end_right' = unlist(seq_end_right), 'seq_len_right' = unlist(seq_len_right))
+         },
+         'dbscan' = {
+           result <- data.frame('seq_start_left2' = unlist(seq_start_left), 'seq_end_left2' = unlist(seq_end_left), 
+                                'seq_len_left2' = unlist(seq_len_left), 'seq_start_right2' = unlist(seq_start_right),
+                                'seq_end_right2' = unlist(seq_end_right), 'seq_len_right2' = unlist(seq_len_right))
+         },
+         'autoencoder' = {
+           result <- data.frame('seq_start_left3' = unlist(seq_start_left), 'seq_end_left3' = unlist(seq_end_left), 
+                                'seq_len_left3' = unlist(seq_len_left), 'seq_start_right3' = unlist(seq_start_right),
+                                'seq_end_right3' = unlist(seq_end_right), 'seq_len_right3' = unlist(seq_len_right))
+         }
+  )
+  
+  
+  
+  return(result)
+}
+
+wide_window_anomaly <- function(method, time_series, threshold_window = 30, more = 1, limiar) {
+  data <- window_abroad_normalization('kmeans', time_series, threshold_window = 30, more = 1)
+  anomaly <- list()
+  
+  for (i in 1:nrow(data)) {
+    data_ <- time_series[time_series$time%in%c(data$seq_start_left[i]:data$seq_end_right[i]),'value']
+    anomaly[[i]] <- prob_dist(data_,limiar)
+  }
+  
+  return(anomaly)
+}
+
 # Example KMEANS:
 
-time_series <- kmeans_func(time_series, 10)
+time_series <- kmeans_func(time_series, 10,1)
 
 generate_plot(time_series,'predicted_event','kmeans')
 
 # Example DBSCAN:
 
-time_series <- dbscan_func(time_series, 5,2)
+time_series <- dbscan_func(time_series, 10,2)
 
 generate_plot(time_series,'predicted_event2','dbscan')
 
 # Example Autoencoder:
 
-time_series <- autoencoder_func(time_series, 5)
+time_series <- autoencoder_func(time_series, 10,1)
 
 generate_plot(time_series,'predicted_event3','autoencoder')
 
+###################### PROBABILISTIC ANOMALIES ######################
 
+#----------- Example KMEANS:
+
+#### METODO 1
+data <- time_series[time_series$predicted_event,'value']
+anomalias <- prob_dist(data, 0.2)
+time_series$predicted_event_dist <- FALSE
+time_series[time_series$value==anomalias,'predicted_event_dist'] <- TRUE
+generate_plot(time_series,'predicted_event_dist','kmeans com prob')
+
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'kmeans', 0.2)
+time_series$predicted_event_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event_dist','kmeans com prob')
+
+#### METODO 3
+anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event_dist'] <- TRUE
+generate_plot(time_series,'predicted_event_dist','kmeans com janela extendida')
+
+#----------- Example DBSCAN:
+
+#### METODO 1
+data <- time_series[time_series$predicted_event2,'value']
+anomalias <- prob_dist(data, 0.2)
+time_series$predicted_event2_dist <- FALSE
+time_series[time_series$value==anomalias,'predicted_event2_dist'] <- TRUE
+generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
+
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'dbscan', 0.2)
+time_series$predicted_event2_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
+
+#### METODO 3
+anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event2_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event2_dist'] <- TRUE
+generate_plot(time_series,'predicted_event2_dist','dbscan com janela extendida')
+
+#----------- Example AUTOENCODER:
+
+#### METODO 1
+data <- time_series[time_series$predicted_event3,'value']
+anomalias <- prob_dist(data, 0.1)
+time_series$predicted_event3_dist <- FALSE
+time_series[time_series$value==anomalias,'predicted_event3_dist'] <- TRUE
+generate_plot(time_series,'predicted_event3_dist','autoencoder com prob')
+
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'autoencoder', 0.2)
+time_series$predicted_event3_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event3_dist','autoencoder com prob')
+
+#### METODO 3
+anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event3_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
+generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida')
 
 ###################### ANOMALY POINT STACIONAY ######################
 
@@ -312,36 +588,65 @@ generate_plot(time_series,'predicted_event3','autoencoder')
 
 ###################### PROBABILISTIC ANOMALIES ######################
 
-# Example KMEANS:
+#----------- Example KMEANS:
 
+#### METODO 1
 data <- time_series[time_series$predicted_event,'value']
-
 anomalias <- prob_dist(data, 0.2)
-
-time_series$predicted_event1_dist <- FALSE
+time_series$predicted_event_dist <- FALSE
 time_series[time_series$value==anomalias,'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','kmeans com prob')
 
-# Example DBSCAN:
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'kmeans', 0.2)
+time_series$predicted_event_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event_dist','kmeans com prob')
 
+#### METODO 3
+anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event_dist'] <- TRUE
+generate_plot(time_series,'predicted_event_dist','kmeans com janela extendida')
+
+#----------- Example DBSCAN:
+
+#### METODO 1
 data <- time_series[time_series$predicted_event2,'value']
-
 anomalias <- prob_dist(data, 0.2)
-
 time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value==anomalias,'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
 
-# Example AUTOENCODER:
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'dbscan', 0.2)
+time_series$predicted_event2_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
 
+#### METODO 3
+anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event2_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event2_dist'] <- TRUE
+generate_plot(time_series,'predicted_event2_dist','dbscan com janela extendida')
+
+#----------- Example AUTOENCODER:
+
+#### METODO 1
 data <- time_series[time_series$predicted_event3,'value']
-
-anomalias <- prob_dist(data, 0.161)
-
+anomalias <- prob_dist(data, 0.1)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value==anomalias,'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com prob')
 
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'autoencoder', 0.2)
+time_series$predicted_event3_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event3_dist','autoencoder com prob')
+
+#### METODO 3
+anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event3_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
+generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida')
 
 ###################### ANOMALY POINT NO STACIONAY ######################
 
@@ -375,33 +680,62 @@ generate_plot(time_series,'predicted_event3','autoencoder')
 
 ###################### PROBABILISTIC ANOMALIES ######################
 
-# Example KMEANS:
+#----------- Example KMEANS:
 
+#### METODO 1
 data <- time_series[time_series$predicted_event,'value']
-
 anomalias <- prob_dist(data, 0.2)
-
 time_series$predicted_event_dist <- FALSE
 time_series[time_series$value==anomalias,'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','kmeans com prob')
 
-# Example DBSCAN:
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'kmeans', 0.2)
+time_series$predicted_event_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event_dist','kmeans com prob')
 
+#### METODO 3
+anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event_dist'] <- TRUE
+generate_plot(time_series,'predicted_event_dist','kmeans com janela extendida')
+
+#----------- Example DBSCAN:
+
+#### METODO 1
 data <- time_series[time_series$predicted_event2,'value']
-
-anomalias <- prob_dist(data, 0.05)
-
+anomalias <- prob_dist(data, 0.2)
 time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value==anomalias,'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
 
-# Example AUTOENCODER:
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'dbscan', 0.2)
+time_series$predicted_event2_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
 
+#### METODO 3
+anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event2_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event2_dist'] <- TRUE
+generate_plot(time_series,'predicted_event2_dist','dbscan com janela extendida')
+
+#----------- Example AUTOENCODER:
+
+#### METODO 1
 data <- time_series[time_series$predicted_event3,'value']
-
-anomalias <- prob_dist(data, 0.05)
-
+anomalias <- prob_dist(data, 0.1)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value==anomalias,'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com prob')
 
+#### METODO 2
+data <- anomaly_window_normalization(time_series, 'autoencoder', 0.2)
+time_series$predicted_event3_dist <- rownames(time_series) %in% data$real_Seq
+generate_plot(time_series,'predicted_event3_dist','autoencoder com prob')
+
+#### METODO 3
+anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+time_series$predicted_event3_dist <- FALSE
+time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
+generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida')
