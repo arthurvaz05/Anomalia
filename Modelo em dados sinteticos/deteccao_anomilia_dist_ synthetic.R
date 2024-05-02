@@ -265,7 +265,11 @@ prob_dist <-  function(data, limiar) {
   return(anomalias)
 }
 
+method <- "autoencoder"
+limiar <- 0.2
+
 anomaly_window_normalization <- function(time_series, method = 'dbscan', limiar = 0.2) {
+  # seleciona as colunas de acordo com o modelo escolhido
   switch(method,
          'kmeans' = {
            predict_col <- 'predicted_event'
@@ -283,8 +287,9 @@ anomaly_window_normalization <- function(time_series, method = 'dbscan', limiar 
            seq_len_col <- 'seq_len3'
          }
   )
-  
+  # filtra o data frame com as colunas selecionadas
   data <- time_series[time_series[, predict_col], c(predict_col, 'value', seq_start_col, seq_len_col)]
+  # a coluna seq_start é igual a 1 (boolean) e para ele pegar a real posicao precisa olhar o índice do data frame
   data$seq_inicio <- rownames(data) %>% as.numeric() * data[, seq_start_col]
   data$seq_fim <- data$seq_inicio + data[, seq_len_col] - 1
   data$seq_fim <- data$seq_fim * data[, seq_start_col]
@@ -301,20 +306,33 @@ anomaly_window_normalization <- function(time_series, method = 'dbscan', limiar 
   y <- unlist(z_scores_list)
   anomalias <- prob_dist(y, limiar)
   
+  # check if the anomalias is NULL, then print the message "não existe anomalias"
+  if (is.null(anomalias)) {
+    print('Não existe anomalias')
+    return()
+  }
+  
   data2 <- data.frame(seq_anomaly = y, dist_anomaly = y %in% anomalias)
   
   idx_anomalies <- lapply(seq(length(z_scores_idx$seq_inicio)), function(i) {
     seq(z_scores_idx$seq_inicio[i], z_scores_idx$seq_fim[i])
   })
-  data2$real_Seq <- unlist(idx_anomalies)
+  
+  # filtrar para as posicoes existentes da serie levando em conta o seu tamanho
+  anomalia_list <- unlist(idx_anomalies)
+  anomalia_list <- anomalia_list[anomalia_list<= nrow(time_series)]
+  
+  # retorna a sequencia original
+  data2$real_Seq <- anomalia_list
   
   # check the real_Seq if the dist_anomaly is False THEN real_Seq is Null
   data2$real_Seq <- ifelse(data2$dist_anomaly, data2$real_Seq, NA)
   
+  
   return(data2)
 }
 
-window_abroad_normalization <- function(method, time_series, threshold_window = 30, more = 1) {
+window_abroad_normalization <- function(method, time_series, threshold_window, more = 1) {
   
   switch(method,
          'kmeans' = {
@@ -333,8 +351,11 @@ window_abroad_normalization <- function(method, time_series, threshold_window = 
            seq_len_col <- 'seq_len3'
          }
   )
+  # filtra as colunas de acordo com o modelo escolhido
   data_total <- time_series[time_series[, predict_col], c(predict_col,'time','value', seq_start_col, seq_len_col)]
+  # filtra a primeira posicao da sequencia anomala
   data_total <- data_total[data_total[,seq_start_col]==1,]
+  # adiciona as colunas de aumento de janela
   data_total <- cbind(data_total, generate_length_window(data_total,method,threshold_window,predict_col,seq_start_col,seq_len_col, more))
   return(data_total)
 }
@@ -358,6 +379,7 @@ generate_length_window <- function(data_total,method,threshold_window,predict_co
     data <- data_total[i,]
     # print(data)
     # if more equal to 1 ceiling will be on the right, if 0 floor will be on the right
+    # a coluna time é a sequencia original
     if (more == 1) {
       if(floor((threshold_window - data[,seq_len_col])/2)+data[,'time']+data[,seq_len_col] > nrow(time_series)) {
         seq_start_right[i] <- (data[,'time']+data[,seq_len_col])+1
@@ -453,8 +475,8 @@ generate_length_window <- function(data_total,method,threshold_window,predict_co
   return(result)
 }
 
-wide_window_anomaly <- function(method, time_series, threshold_window = 30, more = 1, limiar) {
-  data <- window_abroad_normalization('kmeans', time_series, threshold_window = 30, more = 1)
+wide_window_anomaly <- function(method, time_series, threshold_window, more = 1, limiar) {
+  data <- window_abroad_normalization(method, time_series, threshold_window, more = 1)
   anomaly <- list()
   
   for (i in 1:nrow(data)) {
@@ -512,7 +534,7 @@ time_series$predicted_event_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event_dist','kmeans com prob')
 
 #### METODO 3
-anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 30, more = 1, limiar = 0.18)
 time_series$predicted_event_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','kmeans com janela extendida')
@@ -556,6 +578,7 @@ anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida')
+
 
 ###################### ANOMALY POINT STACIONAY ######################
 
@@ -649,6 +672,7 @@ anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida')
+
 
 ###################### ANOMALY POINT NO STACIONAY ######################
 
