@@ -95,17 +95,7 @@ create_nonstationary_ts <- function(n, trend = NULL, seasonality = NULL, noise_s
   ts(ts_values)
 }
 
-
-###################### ANOMALY WINDOW STACIONAY ######################
-
-time_series <- generate_time_series(n = 50, 
-                                    anomalies_qty = 2, 
-                                    variance_size = 0.4, 
-                                    stationary = TRUE,
-                                    anomaly_intensity = 4)
-
-# plot
-plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
+###################### CRIACAO DAS FUNCOES ###########################
 
 kmeans_func <- function(time_series, window, n_cluster = 2) {
   # disable the warnings
@@ -475,9 +465,21 @@ wide_window_anomaly <- function(method, time_series, threshold_window = 30, more
   return(anomaly)
 }
 
+
+###################### ANOMALY WINDOW STACIONAY ######################
+
+time_series <- generate_time_series(n = 50, 
+                                    anomalies_qty = 2, 
+                                    variance_size = 0.4, 
+                                    stationary = TRUE,
+                                    anomaly_intensity = 4)
+
+# plot
+plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
+
 # Example KMEANS:
 
-time_series <- kmeans_func(time_series, 10,1)
+time_series <- kmeans_func(time_series, 10,2)
 
 generate_plot(time_series,'predicted_event','kmeans')
 
@@ -525,7 +527,7 @@ time_series[time_series$value==anomalias,'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
 
 #### METODO 2
-data <- anomaly_window_normalization(time_series, 'dbscan', 0.2)
+data <- anomaly_window_normalization(time_series, 'dbscan', 0.1)
 time_series$predicted_event2_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event2_dist','dbscan com prob')
 
@@ -582,7 +584,7 @@ generate_plot(time_series,'predicted_event2','dbscan')
 
 # Example AUTOENCODER:
 
-time_series <- autoencoder_func(time_series, 10)
+time_series <- autoencoder_func(time_series, 10, 1)
 
 generate_plot(time_series,'predicted_event3','autoencoder')
 
@@ -674,7 +676,7 @@ generate_plot(time_series,'predicted_event2','dbscan')
 
 # Example AUTOENCODER:
 
-time_series <- autoencoder_func(time_series, 10)
+time_series <- autoencoder_func(time_series, 10, 1)
 
 generate_plot(time_series,'predicted_event3','autoencoder')
 
