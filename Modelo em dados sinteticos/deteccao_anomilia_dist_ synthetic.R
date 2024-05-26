@@ -18,9 +18,6 @@ source('/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/carregar_b
   library(harbinger)
 }
 
-# Base directory for the datasets
-base_dir <- "/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/Dataset"
-
 
 generate_time_series <- function(n, anomalies_qty, variance_size, anomaly_intensity,noise_sd = 0.5,seasonality = c(1,-1),trend_increment = 0.1 ,stationary = TRUE, window_anomaly = TRUE) {
   # Generate the time index
@@ -509,8 +506,49 @@ wide_window_anomaly <- function(method, time_series, threshold_window, more = 1,
   return(anomaly)
 }
 
+# Function to calculate confusion matrix and transform it into a data frame
+get_cm <- function(true_events, predicted_events, method_name) {
+  # Ensure predicted_events has the same levels as true_events
+  predicted_events <- factor(predicted_events, levels = levels(as.factor(true_events)))
+  
+  # Calculate confusion matrix
+  cm <- confusionMatrix(as.factor(true_events), predicted_events)
+  
+  # Transform into a data frame
+  cm_df <- as.data.frame(cm$byClass)
+  cm_df$method <- method_name
+  colnames(cm_df) <- c('value', 'method')
+  
+  return(cm_df)
+}
+
+###################### CARREGAR DATASET SINTETICO ######################
+
+# Base directory for the datasets
+base_dir <- "/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/Dataset_sintetico"
+
+files <- list.files(base_dir, full.names = TRUE)
+
+basename(files[1])%>%print()
+serie1_estacionaria <- read.csv(files[1],sep = ";", row.names = NULL, dec = ",")
+serie1_estacionaria$value <- as.numeric(serie1_estacionaria$value)
+
+basename(files[2])%>%print()
+serie2_estacionaria_seqanomaly <- read.csv(files[2],sep = ",", row.names = NULL, dec = ",")
+serie2_estacionaria_seqanomaly$value <- as.numeric(serie2_estacionaria_seqanomaly$value)
+
+basename(files[3])%>%print()
+serie3_naoestacionaria <- read.csv(files[3],sep = ";", row.names = NULL, dec = ",")
+serie3_naoestacionaria$value <- as.numeric(serie3_naoestacionaria$value)
+
+basename(files[4])%>%print()
+serie4_estacionaria_multipleanomaly <- read.csv(files[4],sep = ",", row.names = NULL, dec = ",")
+serie4_estacionaria_multipleanomaly$value <- as.numeric(serie4_estacionaria_multipleanomaly$value)
 
 ###################### ANOMALY WINDOW STACIONAY ######################
+
+
+##################### GERAR DATASET GENERICO ######################
 
 time_series <- generate_time_series(n = 100, 
                                     anomalies_qty = 1, 
@@ -521,11 +559,24 @@ time_series <- generate_time_series(n = 100,
 # plot
 plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
 
+###################### ESCOLHA DO DATASET ######################
+
+# Check if exist the csv serie2_estacionaria_seqanomaly
+if (exists("serie2_estacionaria_seqanomaly")) {
+  time_series <- serie2_estacionaria_seqanomaly
+}
+
+plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
+
+
 # Example KMEANS:
 
 time_series <- kmeans_func(time_series, 10,1)
 
 generate_plot(time_series,'predicted_event','kmeans')
+
+# Calculate confusion matrices for different methods
+confusion_matrix_kmeans <- get_cm(time_series$event, time_series$predicted_event, 'kmeans')
 
 # Example DBSCAN:
 
@@ -533,11 +584,21 @@ time_series <- dbscan_func(time_series, 10,2)
 
 generate_plot(time_series,'predicted_event2','dbscan')
 
+confusion_matrix_dbscan <- get_cm(time_series$event, time_series$predicted_event2, 'dbscan')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_kmeans, confusion_matrix_dbscan)
+
 # Example Autoencoder:
 
 time_series <- autoencoder_func(time_series, 10,1)
 
 generate_plot(time_series,'predicted_event3','autoencoder')
+
+confusion_matrix_autoencoder <- get_cm(time_series$event, time_series$predicted_event3, 'autoencoder')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencoder)
 
 ###################### PROBABILISTIC ANOMALIES ######################
 
@@ -545,21 +606,39 @@ generate_plot(time_series,'predicted_event3','autoencoder')
 
 #### METODO 1
 data <- time_series[time_series$predicted_event,'value']
-anomalias <- prob_dist(data, 0.25)
+anomalias <- prob_dist(data, 0.2)
 time_series$predicted_event_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','kmeans com filtro dist unica')
 
+confusion_matrix_kmeans_filter_method1 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method1)
+
+
 #### METODO 2
-data <- anomaly_window_normalization(time_series, 'kmeans', 0.3)
+data <- anomaly_window_normalization(time_series, 'kmeans', 0.2)
 time_series$predicted_event_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event_dist','kmeans com filtro dist unica norm')
 
+confusion_matrix_kmeans_filter_method2 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method2)
+
+
 #### METODO 3
-anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 10, more = 1, limiar = 0.19)
+anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','kmeans com janela extendida dist ind')
+
+confusion_matrix_kmeans_filter_method3 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method3)
+
 
 #----------- Example DBSCAN:
 
@@ -570,39 +649,78 @@ time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com filtro dist unica')
 
+confusion_matrix_dbscan_filter_method1 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method1)
+
+
 #### METODO 2
-data <- anomaly_window_normalization(time_series, 'dbscan', 0.05)
+data <- anomaly_window_normalization(time_series, 'dbscan', 0.2)
 time_series$predicted_event2_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event2_dist','dbscan com filtro dist unica norm')
 
+confusion_matrix_dbscan_filter_method2 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method2)
+
+
 #### METODO 3
-anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 5, more = 1, limiar = 0.2)
+anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com janela extendida dist ind')
+
+confusion_matrix_dbscan_filter_method3 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method3)
 
 #----------- Example AUTOENCODER:
 
 #### METODO 1
 data <- time_series[time_series$predicted_event3,'value']
-anomalias <- prob_dist(data, 0.1)
+anomalias <- prob_dist(data, 0.2)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com filtro dist unica')
 
+confusion_matrix_autoencod_filter_method1 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencod_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencod_filter_method1)
+
 #### METODO 2
-data <- anomaly_window_normalization(time_series, 'autoencoder', 0.1)
+data <- anomaly_window_normalization(time_series, 'autoencoder', 0.2)
 time_series$predicted_event3_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event3_dist','autoencoder com filtro dist unica norm')
 
+confusion_matrix_autoencod_filter_method2 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencod_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencod_filter_method2)
+
 #### METODO 3
-anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 8, more = 1, limiar = 0.19)
+anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida dist ind')
 
+confusion_matrix_autoencod_filter_method3 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencod_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencod_filter_method3)
+
+confusion_matrix_final%>%write.csv(file = "/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/Resultado/Tabela/confusion_matrix_final_seqanomaly.csv", row.names = TRUE)
+
+# delete all confusion_matrix created
+rm(list = ls(pattern = "confusion_matrix"))
 
 ###################### ANOMALY POINT STACIONAY ######################
+
+
+##################### GERAR DATASET GENERICO ######################
 
 time_series <- generate_time_series(n = 200, 
                                     anomalies_qty = 1, 
@@ -614,6 +732,15 @@ time_series <- generate_time_series(n = 200,
 # plot
 plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
 
+###################### ESCOLHA DO DATASET ######################
+
+# Check if exist the csv serie1_estacionaria
+if (exists("serie1_estacionaria")) {
+  time_series <- serie1_estacionaria
+}
+
+plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
+
 
 # Example KMEANS:
 
@@ -621,17 +748,31 @@ time_series <- kmeans_func(time_series, 10)
 
 generate_plot(time_series,'predicted_event','kmeans')
 
+# Calculate confusion matrices for different methods
+confusion_matrix_kmeans <- get_cm(time_series$event, time_series$predicted_event, 'kmeans')
+
 # Example DBSCAN:
 
 time_series <- dbscan_func(time_series, 10,2)
 
 generate_plot(time_series,'predicted_event2','dbscan')
 
+confusion_matrix_dbscan <- get_cm(time_series$event, time_series$predicted_event2, 'dbscan')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_kmeans, confusion_matrix_dbscan)
+
 # Example AUTOENCODER:
 
 time_series <- autoencoder_func(time_series, 10, 1)
 
 generate_plot(time_series,'predicted_event3','autoencoder')
+
+confusion_matrix_autoencod <- get_cm(time_series$event, time_series$predicted_event3, 'autoencode')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencod)
+
 
 ###################### PROBABILISTIC ANOMALIES ######################
 
@@ -644,16 +785,32 @@ time_series$predicted_event_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','dbscan com filtro dist unica')
 
+confusion_matrix_kmeans_filter_method1 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method1)
+
 #### METODO 2
 data <- anomaly_window_normalization(time_series, 'kmeans', 0.2)
 time_series$predicted_event_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event_dist','kmeans com filtro dist unica norm')
+
+confusion_matrix_kmeans_filter_method2 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method2)
+
 
 #### METODO 3
 anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 30, more = 1, limiar = 0.2)
 time_series$predicted_event_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','kmeans com janela extendida dist ind')
+
+confusion_matrix_kmeans_filter_method3 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method3)
 
 #----------- Example DBSCAN:
 
@@ -664,39 +821,76 @@ time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com filtro dist unica')
 
+confusion_matrix_dbscan_filter_method1 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method1)
+
 #### METODO 2
 data <- anomaly_window_normalization(time_series, 'dbscan', 0.2)
 time_series$predicted_event2_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event2_dist','dbscan com filtro dist unica norm')
 
+confusion_matrix_dbscan_filter_method2 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method2)
+
 #### METODO 3
-anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com janela extendida')
+
+confusion_matrix_dbscan_filter_method3 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method3)
 
 #----------- Example AUTOENCODER:
 
 #### METODO 1
 data <- time_series[time_series$predicted_event3,'value']
-anomalias <- prob_dist(data, 0.1)
+anomalias <- prob_dist(data, 0.2)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com filtro dist unica')
 
+confusion_matrix_autoencode_filter_method1 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencode_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencode_filter_method1)
+
 #### METODO 2
-data <- anomaly_window_normalization(time_series, 'autoencoder', 0.01)
+data <- anomaly_window_normalization(time_series, 'autoencoder', 0.2)
 time_series$predicted_event3_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event3_dist','autoencoder com filtro dist unica norm')
 
+confusion_matrix_autoencode_filter_method2 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencode_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencode_filter_method2)
+
 #### METODO 3
-anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 10, more = 1, limiar = 0.1)
+anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida dist ind')
 
+confusion_matrix_autoencode_filter_method3 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencode_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencode_filter_method3)
+
+confusion_matrix_final%>%write.csv(file = "/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/Resultado/Tabela/confusion_matrix_final_oneanomaly.csv", row.names = TRUE)
+
+# delete all confusion_matrix created
+rm(list = ls(pattern = "confusion_matrix"))
+
 
 ###################### ANOMALY POINT NO STACIONAY ######################
+
+##################### GERAR DATASET GENERICO ######################
 
 time_series <- generate_time_series(n = 100, 
                                     anomalies_qty = 1, 
@@ -708,11 +902,25 @@ time_series <- generate_time_series(n = 100,
 # plot
 plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
 
+###################### ESCOLHA DO DATASET ######################
+
+# Check if exist the csv serie1_estacionaria
+if (exists("serie3_naoestacionaria")) {
+  time_series <- serie3_naoestacionaria
+}
+
+plot(time_series$value, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Value")
+
+
 # Example KMEANS:
 
 time_series <- kmeans_func(time_series, 10,1)
 
 generate_plot(time_series,'predicted_event','kmeans')
+
+# Calculate confusion matrices for different methods
+confusion_matrix_kmeans <- get_cm(time_series$event, time_series$predicted_event, 'kmeans')
+
 
 # Example DBSCAN:
 
@@ -720,11 +928,22 @@ time_series <- dbscan_func(time_series, 10,2)
 
 generate_plot(time_series,'predicted_event2','dbscan')
 
+# Calculate confusion matrices for different methods
+confusion_matrix_dbscan <- get_cm(time_series$event, time_series$predicted_event2, 'dbscan')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_kmeans, confusion_matrix_dbscan)
+
 # Example AUTOENCODER:
 
 time_series <- autoencoder_func(time_series, 10, 1)
 
 generate_plot(time_series,'predicted_event3','autoencoder')
+
+confusion_matrix_autoencod <- get_cm(time_series$event, time_series$predicted_event3, 'autoencode')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencod)
 
 ###################### PROBABILISTIC ANOMALIES ######################
 
@@ -737,16 +956,31 @@ time_series$predicted_event_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','dbscan com filtro dist unica')
 
+confusion_matrix_kmeans_filter_method1 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method1)
+
 #### METODO 2
 data <- anomaly_window_normalization(time_series, 'kmeans', 0.2)
 time_series$predicted_event_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event_dist','kmeans com filtro dist unica norm')
 
+confusion_matrix_kmeans_filter_method2 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method2)
+
 #### METODO 3
-anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 30, more = 1, limiar = 0.2)
+anomalias <- wide_window_anomaly('kmeans', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event_dist'] <- TRUE
 generate_plot(time_series,'predicted_event_dist','kmeans com janela extendida dist ind')
+
+confusion_matrix_kmeans_filter_method3 <- get_cm(time_series$event, time_series$predicted_event_dist, 'kmeans_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_kmeans_filter_method3)
 
 #----------- Example DBSCAN:
 
@@ -757,34 +991,68 @@ time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com filtro dist unica')
 
+confusion_matrix_dbscan_filter_method1 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method1)
+
 #### METODO 2
-data <- anomaly_window_normalization(time_series, 'dbscan', 0.265)
+data <- anomaly_window_normalization(time_series, 'dbscan', 0.2)
 time_series$predicted_event2_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event2_dist','dbscan com filtro dist unica norm')
 
+confusion_matrix_dbscan_filter_method2 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method2)
+
 #### METODO 3
-anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 30, more = 1, limiar = 0.04)
+anomalias <- wide_window_anomaly('dbscan', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event2_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event2_dist'] <- TRUE
 generate_plot(time_series,'predicted_event2_dist','dbscan com janela extendida')
+
+confusion_matrix_dbscan_filter_method3 <- get_cm(time_series$event, time_series$predicted_event2_dist, 'dbscan_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_dbscan_filter_method3)
 
 #----------- Example AUTOENCODER:
 
 #### METODO 1
 data <- time_series[time_series$predicted_event3,'value']
-anomalias <- prob_dist(data, 0.1)
+anomalias <- prob_dist(data, 0.2)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value%in%anomalias,'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com filtro dist unica')
 
+confusion_matrix_autoencode_filter_method1 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencode_filter_method1')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencode_filter_method1)
+
 #### METODO 2
-data <- anomaly_window_normalization(time_series, 'autoencoder', 0.1)
+data <- anomaly_window_normalization(time_series, 'autoencoder', 0.2)
 time_series$predicted_event3_dist <- rownames(time_series) %in% data$real_Seq
 generate_plot(time_series,'predicted_event3_dist','autoencoder com filtro dist unica norm')
 
+confusion_matrix_autoencode_filter_method2 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencode_filter_method2')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencode_filter_method2)
+
 #### METODO 3
-anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 10, more = 1, limiar = 0.07)
+anomalias <- wide_window_anomaly('autoencoder', time_series, threshold_window = 10, more = 1, limiar = 0.2)
 time_series$predicted_event3_dist <- FALSE
 time_series[time_series$value %in% unlist(anomalias),'predicted_event3_dist'] <- TRUE
 generate_plot(time_series,'predicted_event3_dist','autoencoder com janela extendida dist ind')
 
+confusion_matrix_autoencode_filter_method3 <- get_cm(time_series$event, time_series$predicted_event3_dist, 'autoencode_filter_method3')
+
+# Combine the results into a final data frame
+confusion_matrix_final <- rbind(confusion_matrix_final, confusion_matrix_autoencode_filter_method3)
+
+confusion_matrix_final%>%write.csv(file = "/Users/arthurvaz/Desktop/CEFETRJ - Mestrado/Anomalia/Anomalia/Resultado/Tabela/confusion_matrix_final_noestacionary.csv", row.names = TRUE)
+
+# delete all confusion_matrix created
+rm(list = ls(pattern = "confusion_matrix"))
